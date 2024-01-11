@@ -63,6 +63,16 @@ class WeChat(HttpView):
                 )
                 return b""
             case "text":
+                if xml["Content"] == "【收到不支持的消息类型，暂无法显示】":
+                    return build_xml(
+                        {
+                            "ToUserName": user_id,
+                            "FromUserName": settings.wechat_id,
+                            "CreateTime": str(int(time.time())),
+                            "MsgType": "text",
+                            "Content": "请不要发送表情包。",
+                        }
+                    )
                 msg_id = xml["MsgId"]
                 if msg_id in pending_queue:
                     pending_queue_count[msg_id] += 1
