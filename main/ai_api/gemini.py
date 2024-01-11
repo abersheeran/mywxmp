@@ -3,6 +3,7 @@ from typing import Literal, NotRequired, TypedDict
 import httpx
 from loguru import logger
 
+from ..utils import retry_when_exception
 from . import GenerateNetworkError, GenerateResponseError, GenerateSafeError
 
 
@@ -57,6 +58,7 @@ class Content(TypedDict):
     role: NotRequired[Literal["user", "model"]]
 
 
+@retry_when_exception(GenerateResponseError)
 async def generate_content(contents: list[Content]) -> str:
     client = GEMINI_CLIENT
 

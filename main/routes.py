@@ -1,10 +1,10 @@
 import asyncio
 import base64
 import time
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
-from kui.asgi import Depends, HttpView, Query, Routes, request
+from kui.asgi import Depends, HttpView, PlainTextResponse, Query, Routes, request
 from loguru import logger
 
 from .ai_api import GenerateNetworkError, GenerateResponseError, GenerateSafeError
@@ -22,7 +22,12 @@ routes = Routes()
 @routes.http("/wechat", middlewares=[validate_wechat_signature])
 class WeChat(HttpView):
     @classmethod
-    async def get(cls, echostr: Annotated[str, Query(...)]):
+    async def get(
+        cls, echostr: Annotated[str, Query(...)]
+    ) -> Annotated[
+        str,
+        PlainTextResponse[200],
+    ]:
         return echostr
 
     @classmethod
@@ -35,7 +40,10 @@ class WeChat(HttpView):
         pending_queue_count: Annotated[
             dict[str, int], Depends(get_pending_queue_count)
         ],
-    ):
+    ) -> Annotated[
+        str | Literal[b""],
+        PlainTextResponse[200],
+    ]:
         xml = parse_xml((await request.body).decode("utf-8"))
         logger.debug(f"Received message: {xml}")
         msg_type = xml["MsgType"]
@@ -55,6 +63,8 @@ class WeChat(HttpView):
                             }
                         )
                     case "unsubscribe":
+                        return b""
+                    case _:
                         return b""
             case "image":
                 picture_cache.setdefault(user_id, []).append(xml["PicUrl"])
@@ -132,6 +142,16 @@ class WeChat(HttpView):
                         )
                     )
                     return await asyncio.shield(pending_queue[msg_id])
+            case _:
+                return build_xml(
+                    {
+                        "ToUserName": user_id,
+                        "FromUserName": settings.wechat_id,
+                        "CreateTime": str(int(time.time())),
+                        "MsgType": "text",
+                        "Content": "暂不支持此消息类型。",
+                    }
+                )
 
     @classmethod
     async def generate_content(cls, user_id: str, message_text: str):
