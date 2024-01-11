@@ -10,9 +10,11 @@ routes = Routes()
 
 @routes.http("/wechat")
 class Wechat(HttpView):
-    async def get(self, echostr: Annotated[str, Depends(wechat_echostr)]):
+    @classmethod
+    async def get(cls, echostr: Annotated[str, Depends(wechat_echostr)]):
         return echostr
 
-    async def post(self, echostr: Annotated[str, Depends(wechat_echostr)]):
+    @classmethod
+    async def post(cls, echostr: Annotated[str, Depends(wechat_echostr)]):
         xml = parse_xml((await request.body).decode("utf-8"))
         return b""
