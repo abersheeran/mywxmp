@@ -22,4 +22,4 @@ GEMINI_PRO_URL=https://gemini.proxy/v1beta/models/gemini-pro:generateContent
 GEMINI_PRO_VISION_URL=https://gemini.proxy/v1beta/models/gemini-pro-vision:generateContent
 ```
 
-然后运行 `docker-compose up --build -d`，本服务将运行在 `6576` 端口。
+然后运行 `docker compose up --build -d`，本服务将运行在 `6576` 端口。
