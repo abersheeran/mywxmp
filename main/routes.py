@@ -51,7 +51,7 @@ class WeChat(HttpView):
                                 "FromUserName": settings.wechat_id,
                                 "CreateTime": str(int(time.time())),
                                 "MsgType": "text",
-                                "Content": "欢迎关注我的微信公众号，我会在这里推送一些我写的技术文章或者小说，你也可以直接给我发送消息来和我进行 7×24 的对话。",
+                                "Content": "欢迎关注我的微信公众号，我会在这里推送一些我写的小说，你也可以直接给我发送消息来和我进行 7×24 的对话。",
                             }
                         )
                     case "unsubscribe":
