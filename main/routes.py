@@ -65,7 +65,7 @@ class Wechat(HttpView):
     @classmethod
     async def generate_content(cls, user_id: str, message_id: str, message_text: str):
         parts: list[GeminiRequestPart] = [{"text": message_text}]
-        photos: list[str] = get_picture_cache().pop(message_id, [])
+        photos: list[str] = get_picture_cache().pop(user_id, [])
         async with httpx.AsyncClient() as client:
             for photo_url in photos:
                 resp = await client.get(photo_url)
