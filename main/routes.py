@@ -51,8 +51,14 @@ class Wechat(HttpView):
                         return await asyncio.shield(pending_queue[msg_id])
                 else:
                     pending_queue_count[msg_id] = 1
-                    pending_queue[msg_id] = asyncio.create_task(
+                    task = pending_queue[msg_id] = asyncio.create_task(
                         cls.generate_content(user_id, msg_id, xml["Content"])
+                    )
+                    task.add_done_callback(
+                        lambda future: (
+                            pending_queue.pop(msg_id, None),
+                            pending_queue_count.pop(msg_id, None),
+                        )
                     )
                     return await asyncio.shield(pending_queue[msg_id])
             case "image":
