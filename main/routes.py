@@ -40,9 +40,22 @@ class WeChat(HttpView):
         logger.debug(f"Received message: {xml}")
         msg_type = xml["MsgType"]
         user_id = xml["FromUserName"]
-        msg_id = xml["MsgId"]
 
         match msg_type:
+            case "event":
+                match xml["Event"]:
+                    case "subscribe":
+                        return build_xml(
+                            {
+                                "ToUserName": user_id,
+                                "FromUserName": settings.wechat_id,
+                                "CreateTime": str(int(time.time())),
+                                "MsgType": "text",
+                                "Content": "欢迎关注我的微信公众号，我会在这里推送一些我写的技术文章或者小说，你也可以直接给我发送消息来和我进行 7×24 的对话。",
+                            }
+                        )
+                    case "unsubscribe":
+                        pass
             case "image":
                 picture_cache.setdefault(user_id, []).append(xml["PicUrl"])
                 asyncio.get_running_loop().call_later(
@@ -50,6 +63,7 @@ class WeChat(HttpView):
                 )
                 return b""
             case "text":
+                msg_id = xml["MsgId"]
                 if msg_id in pending_queue:
                     pending_queue_count[msg_id] += 1
                     if pending_queue_count[msg_id] >= 3:
@@ -79,6 +93,7 @@ class WeChat(HttpView):
                             "Content": "开发者未开启“接收语音识别结果”功能，请到公众平台官网“设置与开发”页的“接口权限”里开启。",
                         }
                     )
+                msg_id = xml["MsgId"]
                 if msg_id in pending_queue:
                     pending_queue_count[msg_id] += 1
                     if pending_queue_count[msg_id] >= 3:
