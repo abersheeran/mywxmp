@@ -73,7 +73,7 @@ class WeChat(HttpView):
                 else:
                     pending_queue_count[msg_id] = 1
                     task = pending_queue[msg_id] = asyncio.create_task(
-                        cls.generate_content(user_id, msg_id, xml["Content"])
+                        cls.generate_content(user_id, xml["Content"])
                     )
                     task.add_done_callback(
                         lambda future: (
@@ -93,6 +93,16 @@ class WeChat(HttpView):
                             "Content": "开发者未开启“接收语音识别结果”功能，请到公众平台官网“设置与开发”页的“接口权限”里开启。",
                         }
                     )
+                if not xml["Recognition"]:
+                    return build_xml(
+                        {
+                            "ToUserName": user_id,
+                            "FromUserName": settings.wechat_id,
+                            "CreateTime": str(int(time.time())),
+                            "MsgType": "text",
+                            "Content": "微信无法识别这条语音内容，请重新发送。",
+                        }
+                    )
                 msg_id = xml["MsgId"]
                 if msg_id in pending_queue:
                     pending_queue_count[msg_id] += 1
@@ -103,7 +113,7 @@ class WeChat(HttpView):
                 else:
                     pending_queue_count[msg_id] = 1
                     task = pending_queue[msg_id] = asyncio.create_task(
-                        cls.generate_content(user_id, msg_id, xml["Recognition"])
+                        cls.generate_content(user_id, xml["Recognition"])
                     )
                     task.add_done_callback(
                         lambda future: (
@@ -114,7 +124,7 @@ class WeChat(HttpView):
                     return await asyncio.shield(pending_queue[msg_id])
 
     @classmethod
-    async def generate_content(cls, user_id: str, message_id: str, message_text: str):
+    async def generate_content(cls, user_id: str, message_text: str):
         parts: list[GeminiRequestPart] = [{"text": message_text}]
         photos: list[str] = get_picture_cache().pop(user_id, [])
         async with httpx.AsyncClient() as client:
