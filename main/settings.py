@@ -15,5 +15,8 @@ class Settings(BaseSettings):
     gemini_pro_url: str
     gemini_pro_vision_url: str
 
+    # GitHub
+    github_webhook_secret: str
+
 
 settings = Settings.model_validate({})
