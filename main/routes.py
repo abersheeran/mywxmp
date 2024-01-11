@@ -19,7 +19,7 @@ from .xml import build_xml, parse_xml
 routes = Routes()
 
 
-@routes.http("/wechat", middlewares=[validate_wechat_signature, logger.catch])
+@routes.http("/wechat", middlewares=[validate_wechat_signature])
 class WeChat(HttpView):
     @classmethod
     async def get(cls, echostr: Annotated[str, Query(...)]):
@@ -37,11 +37,18 @@ class WeChat(HttpView):
         ],
     ):
         xml = parse_xml((await request.body).decode("utf-8"))
-        msg_id = xml["MsgId"]
+        logger.debug(f"Received message: {xml}")
         msg_type = xml["MsgType"]
         user_id = xml["FromUserName"]
+        msg_id = xml["MsgId"]
 
         match msg_type:
+            case "image":
+                picture_cache.setdefault(user_id, []).append(xml["PicUrl"])
+                asyncio.get_running_loop().call_later(
+                    60, picture_cache.pop, user_id, None
+                )
+                return b""
             case "text":
                 if msg_id in pending_queue:
                     pending_queue_count[msg_id] += 1
@@ -61,12 +68,35 @@ class WeChat(HttpView):
                         )
                     )
                     return await asyncio.shield(pending_queue[msg_id])
-            case "image":
-                picture_cache.setdefault(user_id, []).append(xml["PicUrl"])
-                asyncio.get_running_loop().call_later(
-                    60, picture_cache.pop, user_id, None
-                )
-                return b""
+            case "voice":
+                if "Recognition" not in xml:
+                    return build_xml(
+                        {
+                            "ToUserName": user_id,
+                            "FromUserName": settings.wechat_id,
+                            "CreateTime": str(int(time.time())),
+                            "MsgType": "text",
+                            "Content": "开发者未开启“接收语音识别结果”功能，请到公众平台官网“设置与开发”页的“接口权限”里开启。",
+                        }
+                    )
+                if msg_id in pending_queue:
+                    pending_queue_count[msg_id] += 1
+                    if pending_queue_count[msg_id] >= 3:
+                        return await pending_queue[msg_id]
+                    else:
+                        return await asyncio.shield(pending_queue[msg_id])
+                else:
+                    pending_queue_count[msg_id] = 1
+                    task = pending_queue[msg_id] = asyncio.create_task(
+                        cls.generate_content(user_id, msg_id, xml["Recognition"])
+                    )
+                    task.add_done_callback(
+                        lambda future: (
+                            pending_queue.pop(msg_id, None),
+                            pending_queue_count.pop(msg_id, None),
+                        )
+                    )
+                    return await asyncio.shield(pending_queue[msg_id])
 
     @classmethod
     async def generate_content(cls, user_id: str, message_id: str, message_text: str):
