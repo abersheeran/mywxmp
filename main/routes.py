@@ -179,7 +179,7 @@ class WeChat(HttpView):
             response_content = "这是不可以谈的话题。"
             logger.warning(f"Safe error: {error}")
         except GenerateResponseError as error:
-            response_content = error.message
+            response_content = "我好像找不到我的大脑了。"
             logger.exception(f"Response error: {error}")
         except GenerateNetworkError as error:
             response_content = "网络出现问题，请稍后再试。"
