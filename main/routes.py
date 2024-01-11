@@ -19,8 +19,8 @@ from .xml import build_xml, parse_xml
 routes = Routes()
 
 
-@routes.http("/wechat", middlewares=[validate_wechat_signature])
-class Wechat(HttpView):
+@routes.http("/wechat", middlewares=[validate_wechat_signature, logger.catch])
+class WeChat(HttpView):
     @classmethod
     async def get(cls, echostr: Annotated[str, Query(...)]):
         return echostr
