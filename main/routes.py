@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import time
 from typing import Annotated
 
 import httpx
@@ -12,7 +13,8 @@ from .ai_api.gemini import Part as GeminiRequestPart
 from .ai_api.gemini import generate_content
 from .dependencies import get_pending_queue, get_pending_queue_count, get_picture_cache
 from .middlewares import validate_wechat_signature
-from .xml import parse_xml
+from .settings import settings
+from .xml import build_xml, parse_xml
 
 routes = Routes()
 
@@ -91,4 +93,20 @@ class Wechat(HttpView):
         except GenerateNetworkError as error:
             response_content = "网络出现问题，请稍后再试。"
             logger.warning(f"Network error: {error}")
-        return response_content
+
+        # <xml>
+        # <ToUserName><![CDATA[toUser]]></ToUserName>
+        # <FromUserName><![CDATA[fromUser]]></FromUserName>
+        # <CreateTime>12345678</CreateTime>
+        # <MsgType><![CDATA[text]]></MsgType>
+        # <Content><![CDATA[你好]]></Content>
+        # </xml>
+        return build_xml(
+            {
+                "ToUserName": message_id,
+                "FromUserName": settings.wechat_id,
+                "CreateTime": str(int(time.time())),
+                "MsgType": "text",
+                "Content": response_content,
+            }
+        )

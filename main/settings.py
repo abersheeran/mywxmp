@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     wechat_token: str
     app_id: str
     app_secret: str
+    wechat_id: str
 
     # Gemini
     gemini_pro_key: str
