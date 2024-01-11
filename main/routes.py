@@ -55,7 +55,7 @@ class WeChat(HttpView):
                             }
                         )
                     case "unsubscribe":
-                        pass
+                        return b""
             case "image":
                 picture_cache.setdefault(user_id, []).append(xml["PicUrl"])
                 asyncio.get_running_loop().call_later(
