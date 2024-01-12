@@ -34,12 +34,6 @@ class WeChat(HttpView):
     async def post(
         cls,
         picture_cache: Annotated[dict[str, list[str]], Depends(get_picture_cache)],
-        pending_queue: Annotated[
-            dict[str, asyncio.Task[str]], Depends(get_pending_queue)
-        ],
-        pending_queue_count: Annotated[
-            dict[str, int], Depends(get_pending_queue_count)
-        ],
     ) -> Annotated[
         str | Literal[b""],
         PlainTextResponse[200],
@@ -47,111 +41,103 @@ class WeChat(HttpView):
         xml = parse_xml((await request.body).decode("utf-8"))
         logger.debug(f"Received message: {xml}")
         msg_type = xml["MsgType"]
-        user_id = xml["FromUserName"]
 
         match msg_type:
             case "event":
-                match xml["Event"]:
-                    case "subscribe":
-                        return build_xml(
-                            {
-                                "ToUserName": user_id,
-                                "FromUserName": settings.wechat_id,
-                                "CreateTime": str(int(time.time())),
-                                "MsgType": "text",
-                                "Content": "欢迎关注我的微信公众号，我会在这里推送一些我写的小说，你也可以直接给我发送消息来和我进行 7×24 的对话。",
-                            }
-                        )
-                    case "unsubscribe":
-                        return b""
-                    case _:
-                        return b""
+                return await cls.handle_event(xml)
             case "image":
+                user_id = xml["FromUserName"]
                 picture_cache.setdefault(user_id, []).append(xml["PicUrl"])
                 asyncio.get_running_loop().call_later(
                     60, picture_cache.pop, user_id, None
                 )
                 return b""
             case "text":
-                if xml["Content"] == "【收到不支持的消息类型，暂无法显示】":
-                    return build_xml(
-                        {
-                            "ToUserName": user_id,
-                            "FromUserName": settings.wechat_id,
-                            "CreateTime": str(int(time.time())),
-                            "MsgType": "text",
-                            "Content": "请不要发送表情包。",
-                        }
-                    )
-                msg_id = xml["MsgId"]
-                if msg_id in pending_queue:
-                    pending_queue_count[msg_id] += 1
-                    if pending_queue_count[msg_id] >= 3:
-                        return await pending_queue[msg_id]
-                    else:
-                        return await asyncio.shield(pending_queue[msg_id])
-                else:
-                    pending_queue_count[msg_id] = 1
-                    task = pending_queue[msg_id] = asyncio.create_task(
-                        cls.generate_content(user_id, xml["Content"])
-                    )
-                    task.add_done_callback(
-                        lambda future: (
-                            pending_queue.pop(msg_id, None),
-                            pending_queue_count.pop(msg_id, None),
-                        )
-                    )
-                    return await asyncio.shield(pending_queue[msg_id])
+                return await cls.handle_text(xml)
             case "voice":
-                if "Recognition" not in xml:
-                    return build_xml(
-                        {
-                            "ToUserName": user_id,
-                            "FromUserName": settings.wechat_id,
-                            "CreateTime": str(int(time.time())),
-                            "MsgType": "text",
-                            "Content": "开发者未开启“接收语音识别结果”功能，请到公众平台官网“设置与开发”页的“接口权限”里开启。",
-                        }
-                    )
-                if not xml["Recognition"]:
-                    return build_xml(
-                        {
-                            "ToUserName": user_id,
-                            "FromUserName": settings.wechat_id,
-                            "CreateTime": str(int(time.time())),
-                            "MsgType": "text",
-                            "Content": "微信无法识别这条语音内容，请重新发送。",
-                        }
-                    )
-                msg_id = xml["MsgId"]
-                if msg_id in pending_queue:
-                    pending_queue_count[msg_id] += 1
-                    if pending_queue_count[msg_id] >= 3:
-                        return await pending_queue[msg_id]
-                    else:
-                        return await asyncio.shield(pending_queue[msg_id])
-                else:
-                    pending_queue_count[msg_id] = 1
-                    task = pending_queue[msg_id] = asyncio.create_task(
-                        cls.generate_content(user_id, xml["Recognition"])
-                    )
-                    task.add_done_callback(
-                        lambda future: (
-                            pending_queue.pop(msg_id, None),
-                            pending_queue_count.pop(msg_id, None),
-                        )
-                    )
-                    return await asyncio.shield(pending_queue[msg_id])
+                return await cls.handle_voice(xml)
             case _:
-                return build_xml(
-                    {
-                        "ToUserName": user_id,
-                        "FromUserName": settings.wechat_id,
-                        "CreateTime": str(int(time.time())),
-                        "MsgType": "text",
-                        "Content": "暂不支持此消息类型。",
-                    }
+                user_id = xml["FromUserName"]
+                return cls.reply_text(user_id, "暂不支持此消息类型。")
+
+    @classmethod
+    async def handle_event(cls, xml: dict[str, str]) -> str | Literal[b""]:
+        match xml["Event"]:
+            case "subscribe":
+                return await cls.handle_event_subscribe(xml)
+            case _:
+                return b""
+
+    @classmethod
+    async def handle_event_subscribe(cls, xml: dict[str, str]) -> str | Literal[b""]:
+        return cls.reply_text(
+            xml["FromUserName"],
+            "欢迎关注我的微信公众号，我会在这里推送一些我写的小说。你可以直接给我发送消息来和我进行 7×24 的对话。",
+        )
+
+    @classmethod
+    async def handle_text(cls, xml: dict[str, str]) -> str | Literal[b""]:
+        user_id = xml["FromUserName"]
+        msg_id = xml["MsgId"]
+        content = xml["Content"]
+        if content == "【收到不支持的消息类型，暂无法显示】":
+            return cls.reply_text(user_id, "请不要发送表情包。")
+        return await cls.wait_generate_content(user_id, msg_id, content)
+
+    @classmethod
+    async def handle_voice(cls, xml: dict[str, str]) -> str | Literal[b""]:
+        user_id = xml["FromUserName"]
+        if "Recognition" not in xml:
+            return cls.reply_text(
+                user_id,
+                "开发者未开启“接收语音识别结果”功能，请到公众平台官网“设置与开发”页的“接口权限”里开启。",
+            )
+        if not xml["Recognition"]:
+            return cls.reply_text(user_id, "微信无法识别这条语音内容，请重新发送。")
+        msg_id = xml["MsgId"]
+        content = xml["Recognition"]
+        return await cls.wait_generate_content(user_id, msg_id, content)
+
+    @staticmethod
+    def reply_text(user_id: str, content: str) -> str:
+        """
+        https://developers.weixin.qq.com/doc/offiaccount/Message_Management/Passive_user_reply_message.html
+        """
+        return build_xml(
+            {
+                "ToUserName": user_id,
+                "FromUserName": settings.wechat_id,
+                "CreateTime": str(int(time.time())),
+                "MsgType": "text",
+                "Content": content,
+            }
+        )
+
+    @classmethod
+    async def wait_generate_content(
+        cls, user_id: str, msg_id: str, content: str
+    ) -> str | Literal[b""]:
+        pending_queue = get_pending_queue()
+        pending_queue_count = get_pending_queue_count()
+
+        if msg_id in pending_queue:
+            pending_queue_count[msg_id] += 1
+            if pending_queue_count[msg_id] >= 3:
+                return await pending_queue[msg_id]
+            else:
+                return await asyncio.shield(pending_queue[msg_id])
+        else:
+            pending_queue_count[msg_id] = 1
+            task = pending_queue[msg_id] = asyncio.create_task(
+                cls.generate_content(user_id, content)
+            )
+            task.add_done_callback(
+                lambda future: (
+                    pending_queue.pop(msg_id, None),
+                    pending_queue_count.pop(msg_id, None),
                 )
+            )
+            return await asyncio.shield(pending_queue[msg_id])
 
     @classmethod
     async def generate_content(cls, user_id: str, message_text: str):
