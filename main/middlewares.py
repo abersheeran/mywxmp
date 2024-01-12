@@ -38,11 +38,6 @@ def validate_github_signature(endpoint):
         """Verify that the payload was sent from GitHub by validating SHA256.
 
         Raise and return 403 if not authorized.
-
-        Args:
-            payload_body: original request body to verify (request.body())
-            secret_token: GitHub app webhook token (WEBHOOK_SECRET)
-            signature_header: header received from GitHub (x-hub-signature-256)
         """
         if not signature_header:
             raise HTTPException(

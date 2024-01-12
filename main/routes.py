@@ -4,7 +4,15 @@ import time
 from typing import Annotated, Literal
 
 import httpx
-from kui.asgi import Depends, HttpView, PlainTextResponse, Query, Routes, request
+from kui.asgi import (
+    Depends,
+    Header,
+    HttpView,
+    PlainTextResponse,
+    Query,
+    Routes,
+    request,
+)
 from loguru import logger
 
 from .ai_api import GenerateNetworkError, GenerateResponseError, GenerateSafeError
@@ -12,7 +20,7 @@ from .ai_api.gemini import Content as GeminiRequestContent
 from .ai_api.gemini import Part as GeminiRequestPart
 from .ai_api.gemini import generate_content
 from .dependencies import get_pending_queue, get_pending_queue_count, get_picture_cache
-from .middlewares import validate_wechat_signature
+from .middlewares import validate_github_signature, validate_wechat_signature
 from .settings import settings
 from .xml import build_xml, parse_xml
 
@@ -187,3 +195,20 @@ class WeChat(HttpView):
                 "Content": response_content,
             }
         )
+
+
+@routes.http("/github", middlewares=[validate_github_signature])
+class GitHub(HttpView):
+    @classmethod
+    async def post(
+        cls,
+        github_event_type: Annotated[str, Header(..., alias="X-GitHub-Event")],
+    ):
+        match github_event_type:
+            case "ping":
+                return "pong"
+            case "push":
+                # TODO
+                return "OK"
+            case _:
+                return "Unsupported event type.", 400
