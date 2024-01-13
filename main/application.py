@@ -2,6 +2,7 @@ import asyncio
 
 import httpx
 from kui.asgi import Kui
+from loguru import logger
 
 from .ai_api.gemini import initial_gemini_config
 from .routes import routes
@@ -84,3 +85,4 @@ async def initial_menus(app: Kui) -> None:
             json=menus,
         )
         resp.raise_for_status()
+        logger.info(f"Initial menus: {menus}")
