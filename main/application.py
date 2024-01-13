@@ -85,4 +85,4 @@ async def initial_menus(app: Kui) -> None:
             json=menus,
         )
         resp.raise_for_status()
-        logger.info(f"Initial menus: {menus}")
+        logger.info(f"Initial menus {menus} response: {resp}")
