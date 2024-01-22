@@ -106,13 +106,10 @@ async def generate_content(contents: list[Content]) -> str:
     except httpx.HTTPError as error:
         raise GenerateNetworkError(error)
     else:
-        response_json = resp.json()
         if not resp.is_success:
-            raise GenerateResponseError(
-                response_json.get("error", {}).get("message", "内部错误"),
-                resp,
-            )
+            raise GenerateResponseError(resp.text, resp)
         else:
+            response_json = resp.json()
             candidates = response_json.get("candidates", None)
             if candidates is None:
                 raise GenerateSafeError(resp)
