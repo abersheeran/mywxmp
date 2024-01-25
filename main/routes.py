@@ -46,8 +46,9 @@ class WeChat(HttpView):
         str | Literal[b""],
         PlainTextResponse[200],
     ]:
-        xml = parse_xml((await request.body).decode("utf-8"))
-        logger.debug(f"Received message: {xml}")
+        text = (await request.body).decode("utf-8")
+        xml = parse_xml(text)
+        logger.debug(f"Received message: {xml}\n{text}")
         msg_type = xml["MsgType"]
 
         match msg_type:
