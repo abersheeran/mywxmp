@@ -169,7 +169,9 @@ class WeChat(HttpView):
                 )
         contents: list[GeminiRequestContent] = [{"parts": parts}]
         try:
-            response_content = await generate_content(contents)
+            response_content = await generate_content(
+                contents, safety_threshold="BLOCK_MEDIUM_AND_ABOVE"
+            )
         except GenerateSafeError as error:
             response_content = "这是不可以谈的话题。"
             logger.warning(f"Safe error: {error}")

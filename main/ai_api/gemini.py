@@ -59,7 +59,16 @@ class Content(TypedDict):
 
 
 @retry_when_exception(GenerateResponseError)
-async def generate_content(contents: list[Content]) -> str:
+async def generate_content(
+    contents: list[Content],
+    *,
+    safety_threshold: Literal[
+        "BLOCK_NONE",
+        "BLOCK_ONLY_HIGH",
+        "BLOCK_MEDIUM_AND_ABOVE",
+        "BLOCK_LOW_AND_ABOVE",
+    ] = "BLOCK_NONE",
+) -> str:
     client = GEMINI_CLIENT
 
     use_vision = False
@@ -92,7 +101,7 @@ async def generate_content(contents: list[Content]) -> str:
                     "topK": 10,
                 },
                 "safetySettings": [
-                    {"category": category, "threshold": "BLOCK_NONE"}
+                    {"category": category, "threshold": safety_threshold}
                     for category in (
                         "HARM_CATEGORY_HARASSMENT",
                         "HARM_CATEGORY_HATE_SPEECH",
