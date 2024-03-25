@@ -12,11 +12,11 @@ class Settings(BaseSettings):
 
     # Gemini
     gemini_pro_key: str
-    gemini_pro_url: str
-    gemini_pro_vision_url: str
+    gemini_pro_url: str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+    gemini_pro_vision_url: str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent"
 
     # GitHub
-    github_webhook_secret: str
+    github_webhook_secret: str | None = None
 
 
 settings = Settings.model_validate({})
