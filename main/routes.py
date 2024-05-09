@@ -118,7 +118,7 @@ class WeChat(HttpView):
 
     @classmethod
     async def handle_event(cls, xml: dict[str, str]) -> str | Literal[b""]:
-        if "EventKey" in xml and xml["Event"] in ("subscribe", "scan"):
+        if xml["EventKey"] and xml["Event"] in ("subscribe", "scan"):
             return await cls.handle_scan_callback(xml)
 
         match xml["Event"]:
