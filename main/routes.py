@@ -62,6 +62,7 @@ async def create_wechat_qrcode(
         )
         resp.raise_for_status()
         qrcode = resp.json()
+        logger.debug(f"Generate WeChat QR code: {qrcode}")
 
     return (
         WechatQrCodeEntity(
