@@ -1,30 +1,76 @@
 import asyncio
 import base64
 import time
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from kui.asgi import (
+    Body,
     Depends,
     Header,
+    HTTPException,
     HttpView,
+    JSONResponse,
     PlainTextResponse,
     Query,
     Routes,
+    api_key_auth_dependency,
     request,
 )
 from loguru import logger
+from pydantic import HttpUrl
 
 from .ai_api import GenerateNetworkError, GenerateResponseError, GenerateSafeError
 from .ai_api.gemini import Content as GeminiRequestContent
 from .ai_api.gemini import Part as GeminiRequestPart
 from .ai_api.gemini import generate_content
-from .dependencies import get_pending_queue, get_pending_queue_count, get_picture_cache
+from .dependencies import (
+    get_access_token,
+    get_pending_queue,
+    get_pending_queue_count,
+    get_picture_cache,
+)
 from .middlewares import validate_github_signature, validate_wechat_signature
+from .schemas import WechatQrCodeEntity
 from .settings import settings
 from .xml import build_xml, parse_xml
 
 routes = Routes()
+
+
+@routes.http.post("/qrcode")
+async def create_wechat_qrcode(
+    api_key: Annotated[str, Depends(api_key_auth_dependency("api-key"))],
+    callback: Annotated[HttpUrl, Body(...)],
+) -> Annotated[Any, JSONResponse[201, {}, WechatQrCodeEntity]]:
+    if settings.qrcode_api_token != api_key:
+        raise HTTPException(401)
+
+    payload = {
+        "action_name": "QR_STR_SCENE",
+        "expire_seconds": 60 * 10,
+        "action_info": {
+            "scene": {"scene_str": callback},
+        },
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://api.weixin.qq.com/cgi-bin/qrcode/create",
+            params={"access_token": await get_access_token()},
+            json=payload,
+        )
+        resp.raise_for_status()
+        qrcode = resp.json()
+
+    return (
+        WechatQrCodeEntity(
+            ticket=qrcode["ticket"],
+            expire_seconds=qrcode["expire_seconds"],
+            url=qrcode["url"],
+        ),
+        201,
+    )
 
 
 @routes.http("/wechat", middlewares=[validate_wechat_signature])
@@ -71,6 +117,9 @@ class WeChat(HttpView):
 
     @classmethod
     async def handle_event(cls, xml: dict[str, str]) -> str | Literal[b""]:
+        if "EventKey" in xml and xml["Event"] in ("subscribe", "scan"):
+            return await cls.handle_scan_callback(xml)
+
         match xml["Event"]:
             case "subscribe":
                 return await cls.handle_event_subscribe(xml)
@@ -78,14 +127,29 @@ class WeChat(HttpView):
                 return b""
 
     @classmethod
-    async def handle_event_subscribe(cls, xml: dict[str, str]) -> str | Literal[b""]:
+    async def handle_event_subscribe(cls, xml: dict[str, str]) -> str:
         return cls.reply_text(
             xml["FromUserName"],
             "欢迎关注我的微信公众号，我会在这里推送一些我写的小说。你可以直接给我发送消息来和我进行 7×24 的对话。",
         )
 
     @classmethod
-    async def handle_text(cls, xml: dict[str, str]) -> str | Literal[b""]:
+    async def handle_scan_callback(cls, xml: dict[str, str]) -> str:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                xml["EventKey"],
+                json={
+                    "openid": xml["FromUserName"],
+                    "create_time": xml["CreateTime"],
+                },
+            )
+            response.raise_for_status()
+            if xml["Event"] == "subscribe":
+                return await cls.handle_event_subscribe(xml)
+            return cls.reply_text(xml["FromUserName"], "扫码成功。")
+
+    @classmethod
+    async def handle_text(cls, xml: dict[str, str]) -> str:
         user_id = xml["FromUserName"]
         msg_id = xml["MsgId"]
         content = xml["Content"]
@@ -94,7 +158,7 @@ class WeChat(HttpView):
         return await cls.wait_generate_content(user_id, msg_id, content)
 
     @classmethod
-    async def handle_voice(cls, xml: dict[str, str]) -> str | Literal[b""]:
+    async def handle_voice(cls, xml: dict[str, str]) -> str:
         user_id = xml["FromUserName"]
         if "Recognition" not in xml:
             return cls.reply_text(
@@ -125,7 +189,7 @@ class WeChat(HttpView):
     @classmethod
     async def wait_generate_content(
         cls, user_id: str, msg_id: str, content: str
-    ) -> str | Literal[b""]:
+    ) -> str:
         pending_queue = get_pending_queue()
         pending_queue_count = get_pending_queue_count()
 

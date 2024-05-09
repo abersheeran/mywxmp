@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     app_secret: str
     wechat_id: str
 
+    qrcode_api_token: str = ""
+
     # Gemini
     gemini_pro_key: str
     gemini_pro_url: str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
