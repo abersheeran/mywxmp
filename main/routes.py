@@ -50,7 +50,7 @@ async def create_wechat_qrcode(
         "action_name": "QR_STR_SCENE",
         "expire_seconds": 60 * 10,
         "action_info": {
-            "scene": {"scene_str": callback},
+            "scene": {"scene_str": str(callback)},
         },
     }
 
